@@ -1,0 +1,4 @@
+Paracetamol 50 10
+Ibuprofen 30 0
+Nurofen 100 20
+Aspirina 40 0
