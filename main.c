@@ -22,10 +22,18 @@ typedef struct {
     char name[50];
     int quantity;
     int reserved;
+    float price;
 } Product;
 
 Product products[MAX_PRODUCTS];
 int product_count = 0;
+
+void trim_newline(char *str) {
+    size_t len = strlen(str);
+    if (len > 0 && str[len - 1] == '\n') {
+        str[len - 1] = '\0';
+    }
+}
 
 void load_products() {
     FILE *file = fopen(FILENAME, "r");
@@ -34,8 +42,28 @@ void load_products() {
         return;
     }
 
-    while (fscanf(file, "%s %d %d", products[product_count].name, &products[product_count].quantity, &products[product_count].reserved) != EOF) {
-        product_count++;
+    char line[256];
+    while (fgets(line, sizeof(line), file)) {
+        Product p;
+        char name[100];
+        int quantity, reserved;
+        float price;
+
+        int i = 0;
+        while (line[i] && (line[i] < '0' || line[i] > '9')) i++;
+        if (i == 0 || line[i] == '\0') continue;
+
+        strncpy(name, line, i - 1);
+        name[i - 1] = '\0';
+        trim_newline(name);
+        strcpy(p.name, name);
+
+        sscanf(line + i, "%d %d %f", &quantity, &reserved, &price);
+        p.quantity = quantity;
+        p.reserved = reserved;
+        p.price = price;
+
+        products[product_count++] = p;
     }
 
     fclose(file);
@@ -49,7 +77,11 @@ void save_products() {
     }
 
     for (int i = 0; i < product_count; i++) {
-        fprintf(file, "%s %d %d\n", products[i].name, products[i].quantity, products[i].reserved);
+        fprintf(file, "%s %d %d %.2f\n",
+                products[i].name,
+                products[i].quantity,
+                products[i].reserved,
+                products[i].price);
     }
 
     fclose(file);
@@ -71,7 +103,7 @@ void wait_for_return() {
     int choice;
     do {
         printf("\n0. Înapoi la meniul principal\n");
-        printf("Alegeți o optiune: ");
+        printf("Alegeți o opțiune: ");
         scanf("%d", &choice);
         if (choice != 0) {
             printf(ROSU "Opțiune invalidă. Încercați din nou.\n" RESET);
@@ -83,8 +115,10 @@ void show_available_products() {
     CLEAR_SCREEN();
     printf(ROZ "=== Produse Disponibile ===\n" RESET);
     for (int i = 0; i < product_count; i++) {
-        printf("Produs: " CYAN "%s" RESET ", Cantitate: " VERDE "%d" RESET ", Rezervate: " ROSU "%d" RESET "\n",
-               products[i].name, products[i].quantity, products[i].reserved);
+        if (products[i].quantity > 0) {
+            printf("Produs: " CYAN "%s" RESET ", Cantitate: " VERDE "%d" RESET ", Rezervate: " ROSU "%d" RESET ", Preț: %.2f RON\n",
+                   products[i].name, products[i].quantity, products[i].reserved, products[i].price);
+        }
     }
     wait_for_return();
 }
@@ -92,22 +126,26 @@ void show_available_products() {
 void add_product() {
     CLEAR_SCREEN();
     printf(ROZ "=== Adăugare Produs ===\n" RESET);
+
     if (product_count >= MAX_PRODUCTS) {
         printf(ROSU "Nu se pot adăuga mai multe produse. Limita maximă a fost atinsă.\n" RESET);
         wait_for_return();
         return;
     }
 
-    Product new_product;
+    Product p;
+    getchar();
     printf("Introduceți numele produsului: ");
-    scanf("%s", new_product.name);
-    printf("Introduceți cantitatea disponibilă: ");
-    scanf("%d", &new_product.quantity);
-    new_product.reserved = 0;
+    fgets(p.name, sizeof(p.name), stdin);
+    trim_newline(p.name);
+    printf("Introduceți cantitatea de adaugat: ");
+    scanf("%d", &p.quantity);
+    printf("Introduceți prețul produsului in RON (EX:00.00): ");
+    scanf("%f", &p.price);
+    p.reserved = 0;
 
-    products[product_count++] = new_product;
+    products[product_count++] = p;
     printf(VERDE "Produsul a fost adăugat cu succes.\n" RESET);
-
     save_products();
     wait_for_return();
 }
@@ -115,19 +153,27 @@ void add_product() {
 void delete_product() {
     CLEAR_SCREEN();
     printf(ROZ "=== Ștergere Produs ===\n" RESET);
+
     char name[50];
+    getchar();
     printf("Introduceți numele produsului de șters: ");
-    scanf("%s", name);
+    fgets(name, sizeof(name), stdin);
+    trim_newline(name);
 
     int found = 0;
     for (int i = 0; i < product_count; i++) {
         if (strcmp(products[i].name, name) == 0) {
-            for (int j = i; j < product_count - 1; j++) {
-                products[j] = products[j + 1];
+            if (products[i].reserved > 0) {
+                products[i].quantity = 0;
+                printf(ROSU "Produsul are rezervări active. A fost scos doar din stoc.\n" RESET);
+            } else {
+                for (int j = i; j < product_count - 1; j++) {
+                    products[j] = products[j + 1];
+                }
+                product_count--;
+                printf(VERDE "Produsul a fost șters complet.\n" RESET);
             }
-            product_count--;
             found = 1;
-            printf(VERDE "Produsul a fost șters cu succes.\n" RESET);
             break;
         }
     }
@@ -143,15 +189,18 @@ void delete_product() {
 void search_product() {
     CLEAR_SCREEN();
     printf(ROZ "=== Căutare Produs ===\n" RESET);
+
     char name[50];
-    printf("Introduceți numele produsului de căutat: ");
-    scanf("%s", name);
+    getchar();
+    printf("Introduceți numele produsului: ");
+    fgets(name, sizeof(name), stdin);
+    trim_newline(name);
 
     int found = 0;
     for (int i = 0; i < product_count; i++) {
         if (strcmp(products[i].name, name) == 0) {
-            printf("Produs: " CYAN "%s" RESET ", Cantitate disponibilă: " VERDE "%d" RESET ", Rezervate: " ROSU "%d" RESET "\n",
-                   products[i].name, products[i].quantity, products[i].reserved);
+            printf("Produs: " CYAN "%s" RESET ", Cantitate: " VERDE "%d" RESET ", Rezervate: " ROSU "%d" RESET ", Preț: %.2f RON\n",
+                   products[i].name, products[i].quantity, products[i].reserved, products[i].price);
             found = 1;
             break;
         }
@@ -167,10 +216,20 @@ void search_product() {
 void reserve_product() {
     CLEAR_SCREEN();
     printf(ROZ "=== Rezervare Produs ===\n" RESET);
+
+    for (int i = 0; i < product_count; i++) {
+        if (products[i].quantity > 0) {
+            printf("Produs: " CYAN "%s" RESET ", Cantitate: " VERDE "%d" RESET ", Preț: %.2f RON\n",
+                   products[i].name, products[i].quantity, products[i].price);
+        }
+    }
+
     char name[50];
     int quantity;
-    printf("Introduceți numele produsului de rezervat: ");
-    scanf("%s", name);
+    getchar();
+    printf("Introduceți numele produsului: ");
+    fgets(name, sizeof(name), stdin);
+    trim_newline(name);
     printf("Introduceți cantitatea de rezervat: ");
     scanf("%d", &quantity);
 
@@ -180,9 +239,9 @@ void reserve_product() {
             if (products[i].quantity >= quantity) {
                 products[i].quantity -= quantity;
                 products[i].reserved += quantity;
-                printf(VERDE "Produsul a fost rezervat cu succes.\n" RESET);
+                printf(VERDE "Rezervarea a fost realizată cu succes.\n" RESET);
             } else {
-                printf(ROSU "Cantitatea disponibilă este insuficientă.\n" RESET);
+                printf(ROSU "Stoc insuficient pentru această rezervare.\n" RESET);
             }
             found = 1;
             break;
@@ -200,17 +259,20 @@ void reserve_product() {
 void show_reserved_products() {
     CLEAR_SCREEN();
     printf(ROZ "=== Produse Rezervate ===\n" RESET);
+
     int any_reserved = 0;
     for (int i = 0; i < product_count; i++) {
         if (products[i].reserved > 0) {
-            printf("Produs: " CYAN "%s" RESET ", Cantitate rezervată: " ROSU "%d" RESET "\n",
-                   products[i].name, products[i].reserved);
+            printf("Produs: " CYAN "%s" RESET ", Cantitate rezervată: " ROSU "%d" RESET ", Preț: %.2f RON\n",
+                   products[i].name, products[i].reserved, products[i].price);
             any_reserved = 1;
         }
     }
+
     if (!any_reserved) {
         printf(ROSU "Nu există produse rezervate.\n" RESET);
     }
+
     wait_for_return();
 }
 
@@ -228,31 +290,18 @@ int main() {
         scanf("%d", &choice);
 
         switch (choice) {
-            case 1:
-                show_available_products();
-                break;
-            case 2:
-                add_product();
-                break;
-            case 3:
-                delete_product();
-                break;
-            case 4:
-                search_product();
-                break;
-            case 5:
-                reserve_product();
-                break;
-            case 6:
-                show_reserved_products();
-                break;
+            case 1: show_available_products(); break;
+            case 2: add_product(); break;
+            case 3: delete_product(); break;
+            case 4: search_product(); break;
+            case 5: reserve_product(); break;
+            case 6: show_reserved_products(); break;
             case 7:
                 printf(VERDE "Ieșire din meniu\n" RESET);
                 break;
             default:
                 printf(ROSU "Opțiune invalidă. Încercați din nou.\n" RESET);
-                getchar();
-                getchar();
+                getchar(); getchar();
         }
     } while (choice != 7);
 
