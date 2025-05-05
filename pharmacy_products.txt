@@ -1,4 +1,5 @@
-Paracetamol 50 10
-Ibuprofen 30 0
-Nurofen 100 20
-Aspirina 40 0
+Paracetamol 100 10 8.50
+Ibuprofen 0 5 12.30
+Aspirina 75 0 5.00
+Ceai musetel 80 30 10.99
+Test 56 0 3.18
